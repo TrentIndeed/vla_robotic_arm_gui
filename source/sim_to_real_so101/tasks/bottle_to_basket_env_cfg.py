@@ -40,6 +40,7 @@ from sim_to_real_so101 import assets
 from sim_to_real_so101.assets.so101 import S0101_CONTACT_GRASP_CFG
 from sim_to_real_so101.mdp import (
     randomize_sky_light,
+    randomize_camera_pose,
     ROBOT_COLORS,
     randomize_mat_rotation,
     randomize_robot_color,
@@ -146,6 +147,19 @@ class BottleToBasketEventCfg(TaskEventCfg):
 
     # The mat was removed from the scene, so drop the event that randomized it.
     reset_mat_rotation = None
+
+    # Move the desk camera toward Trenton's back-LEFT corner (+y) and HIGHER (+z), as a
+    # fixed offset from its lightbox default. TUNE these from what you see (and add
+    # rot_range pitch/yaw if it needs re-aiming at the workspace).
+    reset_camera_external_pose = EventTerm(
+        func=randomize_camera_pose,
+        mode="reset",
+        params={
+            "prim_path_pattern": "{ENV_REGEX_NS}/LightStudio/LightBox/camera_mount",
+            "pos_range": {"x": (0.0, 0.0), "y": (0.20, 0.20), "z": (0.10, 0.10)},  # +y=left, +z=up
+            "rot_range": {},
+        },
+    )
 
     reset_bottle = EventTerm(
         func=base_mdp.reset_root_state_uniform,
