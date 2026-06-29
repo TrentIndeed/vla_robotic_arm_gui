@@ -181,11 +181,11 @@ class BottleToBasketSceneCfg(SO101TaskSceneCfg):
     # Trenton's real setup has no black mat — remove it (the lightbox base is the floor).
     mat = None
 
-    # single bottle (vs the workshop's three vials)
+    # single bottle (vs the workshop's three vials). Kept clear of the basket
+    # (basket footprint is ~x[0.31,0.41]); bottle sits closer to the robot.
     bottle = bottle.replace()
     bottle.prim_path = "{ENV_REGEX_NS}/Bottle"
-    # TODO: place where the arm comfortably reaches; refine with the replay overlay.
-    bottle.init_state.pos = (0.25, 0.0, BOTTLE_SPAWN_Z)
+    bottle.init_state.pos = (0.22, 0.0, BOTTLE_SPAWN_Z)
     bottle.init_state.rot = euler_angles_to_quat(np.array([0, 0, 0]), degrees=True)  # upright
 
     basket = basket.replace()
@@ -268,8 +268,8 @@ class BottleToBasketEventCfg(TaskEventCfg):
         func=base_mdp.reset_root_state_uniform,
         mode="reset",
         params={
-            # TODO: tune to the reachable area; deltas around bottle.init_state.pos
-            "pose_range": {"x": (-0.05, 0.05), "y": (-0.10, 0.15), "yaw": (-3.14, 3.14)},
+            # deltas around bottle.init_state.pos — kept tight so it never lands in/under the basket
+            "pose_range": {"x": (-0.03, 0.03), "y": (-0.07, 0.07), "yaw": (-3.14, 3.14)},
             "velocity_range": {},
             "asset_cfg": SceneEntityCfg("bottle"),
         },
