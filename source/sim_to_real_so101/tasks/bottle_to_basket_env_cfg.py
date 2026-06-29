@@ -131,6 +131,13 @@ class BottleToBasketEventCfg(TaskEventCfg):
     (The workshop's reset_vials_rack is rack-slot specific, so we use the standard
     reset_root_state_uniform instead — ranges are deltas around each asset's init pose.)"""
 
+    # Override the base task's robot color (it hardcodes ["orange"]) — Trenton's arm is white.
+    reset_set_robot_visual_material = EventTerm(
+        func=randomize_robot_color,
+        mode="reset",
+        params={"color_names": ["white"]},
+    )
+
     reset_bottle = EventTerm(
         func=base_mdp.reset_root_state_uniform,
         mode="reset",
