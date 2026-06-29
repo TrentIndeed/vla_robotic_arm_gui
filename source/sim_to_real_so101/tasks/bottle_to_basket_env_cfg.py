@@ -34,10 +34,11 @@ from isaaclab.managers import ObservationGroupCfg as ObsGroup
 from isaaclab.managers import ObservationTermCfg as ObsTerm
 from isaaclab.managers import TerminationTermCfg as DoneTerm
 
+from isaaclab.envs import mdp as base_mdp     # standard Isaac Lab MDP terms
+
 from sim_to_real_so101 import assets
 from sim_to_real_so101.assets.so101 import S0101_CONTACT_GRASP_CFG
 from sim_to_real_so101.mdp import (
-    reset_vials_rack,
     randomize_sky_light,
     ROBOT_COLORS,
     randomize_mat_rotation,
@@ -126,17 +127,28 @@ class BottleToBasketDRSceneCfg(BottleToBasketSceneCfg):
 
 @configclass
 class BottleToBasketEventCfg(TaskEventCfg):
-    """Reset events. Reuses reset_vials_rack with a single object + the basket."""
+    """Reset events. Randomize the bottle's start pose on the board; jitter the basket.
+    (The workshop's reset_vials_rack is rack-slot specific, so we use the standard
+    reset_root_state_uniform instead — ranges are deltas around each asset's init pose.)"""
 
-    reset_bottle_setup = EventTerm(
-        func=reset_vials_rack,
+    reset_bottle = EventTerm(
+        func=base_mdp.reset_root_state_uniform,
         mode="reset",
         params={
-            "vials": ["bottle"],          # single object
-            "rack": "basket",
-            "rack_pose_range": {"x": (-0.03, 0.03), "y": (-0.03, 0.03), "yaw": (-0.2, 0.2)},
-            "pose_range": {"x": (-0.06, 0.08), "y": (-0.10, 0.18), "roll": (0.0, 0.0), "yaw": (-3.14, 3.14)},
-            "fixed_vial_z": BOTTLE_SPAWN_Z,
+            # TODO: tune to the reachable area; deltas around bottle.init_state.pos
+            "pose_range": {"x": (-0.05, 0.05), "y": (-0.10, 0.15), "yaw": (-3.14, 3.14)},
+            "velocity_range": {},
+            "asset_cfg": SceneEntityCfg("bottle"),
+        },
+    )
+
+    reset_basket = EventTerm(
+        func=base_mdp.reset_root_state_uniform,
+        mode="reset",
+        params={
+            "pose_range": {"x": (-0.02, 0.02), "y": (-0.02, 0.02), "yaw": (-0.15, 0.15)},
+            "velocity_range": {},
+            "asset_cfg": SceneEntityCfg("basket"),
         },
     )
 
