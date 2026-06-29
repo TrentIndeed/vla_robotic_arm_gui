@@ -95,3 +95,32 @@ gym.register(
     },
 )
 
+
+
+##
+# Bottle -> Basket (Trenton's adaptation). See bottle_to_basket_env_cfg.py + my_task/.
+##
+gym.register(
+    id="Lerobot-So101-Teleop-Bottle-To-Basket",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={"env_cfg_entry_point": f"{__name__}.bottle_to_basket_env_cfg:BottleToBasketEnvCfg"},
+)
+gym.register(
+    id="Lerobot-So101-Teleop-Bottle-To-Basket-DR",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={"env_cfg_entry_point": f"{__name__}.bottle_to_basket_env_cfg:BottleToBasketDREnvCfg"},
+)
+gym.register(
+    id="Lerobot-So101-Teleop-Bottle-To-Basket-Eval",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={"env_cfg_entry_point": f"{__name__}.bottle_to_basket_env_cfg:BottleToBasketEvalEnvCfg"},
+)
+gym.register(
+    id="Lerobot-So101-Teleop-Bottle-To-Basket-DR-Eval",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={"env_cfg_entry_point": f"{__name__}.bottle_to_basket_env_cfg:BottleToBasketEvalDREnvCfg"},
+)
