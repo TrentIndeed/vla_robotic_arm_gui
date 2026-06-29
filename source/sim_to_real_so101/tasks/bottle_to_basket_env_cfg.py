@@ -78,8 +78,10 @@ assets_path = os.path.dirname(os.path.abspath(assets.__file__))
 # Coordinates are in the env frame (robot base sits at about (-0.05, 0, 0); the
 # bottle spawns near (0.25, 0, 0.05), the basket near (0.18, 0.12, 0.05)).
 # +x = forward (where the arm reaches), +z = up.
-EXTERNAL_CAM_EYE = (-0.05, 0.28, 0.40)     # beside the robot (its x), ~11 in left, ~16 in up
-EXTERNAL_CAM_TARGET = (0.18, 0.05, 0.18)   # workspace centre, raised so the view tilts UP ~15 deg
+EXTERNAL_CAM_EYE = (-0.08, 0.31, 0.40)     # back-left, toward the corner, ~16 in up
+EXTERNAL_CAM_LOOK = (0.18, 0.06, 0.06)     # workspace centre on the board (bottle<->basket)
+EXTERNAL_CAM_YAW_RIGHT_DEG = 15.0          # pan the view to the RIGHT (matches the real rig's "15 deg right")
+EXTERNAL_CAM_PITCH_UP_DEG = 15.0           # tilt the view UP
 
 
 def _look_at_quat_opengl(eye, target, up=(0.0, 0.0, 1.0)):
@@ -124,6 +126,23 @@ def _look_at_quat_opengl(eye, target, up=(0.0, 0.0, 1.0)):
         qy = (R[1, 2] + R[2, 1]) / s
         qz = 0.25 * s
     return (float(w), float(qx), float(qy), float(qz))
+
+
+def _aim_quat(eye, look, yaw_right_deg=0.0, pitch_up_deg=0.0):
+    """Look-at quaternion (opengl) that starts aimed from `eye` at `look`, then pans
+    the view RIGHT by `yaw_right_deg` (about world Z) and tilts it UP by `pitch_up_deg`.
+    Tune the verbal knobs directly — positive = right / up."""
+    eye = np.asarray(eye, dtype=float)
+    look = np.asarray(look, dtype=float)
+    f = look - eye
+    dist = float(np.linalg.norm(f))
+    az = np.arctan2(f[1], f[0])                 # azimuth (CCW from +x)
+    el = np.arctan2(f[2], np.hypot(f[0], f[1]))  # elevation
+    az -= np.radians(yaw_right_deg)             # right = clockwise (looking from above)
+    el += np.radians(pitch_up_deg)              # up
+    f_new = np.array([np.cos(el) * np.cos(az), np.cos(el) * np.sin(az), np.sin(el)])
+    target = eye + f_new * dist
+    return _look_at_quat_opengl(eye, target)
 
 # ---- the pick object: a pill bottle (2 in dia x 3 in tall) ----
 manipulation_object_base = RigidObjectCfg(
@@ -188,8 +207,18 @@ class BottleToBasketSceneCfg(SO101TaskSceneCfg):
     camera_external_D455.prim_path = "{ENV_REGEX_NS}/external_cam_D455"
     camera_external_D455.offset = TiledCameraCfg.OffsetCfg(
         pos=EXTERNAL_CAM_EYE,
-        rot=_look_at_quat_opengl(EXTERNAL_CAM_EYE, EXTERNAL_CAM_TARGET),
+        rot=_aim_quat(EXTERNAL_CAM_EYE, EXTERNAL_CAM_LOOK,
+                      EXTERNAL_CAM_YAW_RIGHT_DEG, EXTERNAL_CAM_PITCH_UP_DEG),
         convention="opengl",
+    )
+    # Sharpen: the template focuses 5 cm ahead (good for the in-tent mount), but our
+    # camera is ~0.4 m from the workspace, so refocus there and widen DoF so the whole
+    # board is crisp. (Some softness is just the real 640x480 sensor res the policy sees.)
+    camera_external_D455.spawn = sim_utils.PinholeCameraCfg(
+        projection_type="pinhole",
+        f_stop=200.0,
+        focal_length=13.5,
+        focus_distance=0.40,
     )
 
 
