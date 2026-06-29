@@ -78,8 +78,8 @@ assets_path = os.path.dirname(os.path.abspath(assets.__file__))
 # Coordinates are in the env frame (robot base sits at about (-0.05, 0, 0); the
 # bottle spawns near (0.25, 0, 0.05), the basket near (0.18, 0.12, 0.05)).
 # +x = forward (where the arm reaches), +z = up.
-EXTERNAL_CAM_EYE = (-0.05, 0.20, 0.42)     # back-left-ish, ~16 in up
-EXTERNAL_CAM_TARGET = (0.20, 0.06, 0.04)   # workspace centre (between bottle + basket, on the board)
+EXTERNAL_CAM_EYE = (-0.05, 0.28, 0.40)     # beside the robot (its x), ~11 in left, ~16 in up
+EXTERNAL_CAM_TARGET = (0.18, 0.05, 0.18)   # workspace centre, raised so the view tilts UP ~15 deg
 
 
 def _look_at_quat_opengl(eye, target, up=(0.0, 0.0, 1.0)):
