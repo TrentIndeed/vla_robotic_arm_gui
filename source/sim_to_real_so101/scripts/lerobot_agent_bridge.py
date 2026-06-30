@@ -37,6 +37,9 @@ parser.add_argument("--save_mp4", action="store_true", default=False)
 parser.add_argument("--depth", action="store_true", default=False)
 parser.add_argument("--instance_id_seg", action="store_true", default=False)
 parser.add_argument("--seed", type=int, default=101)
+parser.add_argument("--raw_out", type=str, default="/workspace/raw_demos",
+                    help="Folder to write raw recorded episodes to (converted to a LeRobot "
+                         "dataset later by scripts/build_lerobot_dataset.py).")
 AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
 args_cli.enable_cameras = True
@@ -47,7 +50,9 @@ simulation_app = app_launcher.app
 """Rest follows."""
 
 import gymnasium as gym
+import numpy as np
 import torch
+from PIL import Image
 
 import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils import parse_env_cfg
@@ -81,6 +86,88 @@ def map_real_to_sim(act_dict, joint_mins, joint_maxs, device):
     normalized[-1] = raw[-1] / 100.0              # gripper: 0..100 -> 0..1
     mapped_deg = joint_mins + normalized * (joint_maxs - joint_mins)
     return raw, mapped_deg * torch.pi / 180.0
+
+
+def sim_rad_to_real(state_rad, joint_mins, joint_maxs):
+    """Inverse of map_real_to_sim's value mapping: sim joint radians -> real arm units
+    (what a real follower would report). Used for the recorded observation.state."""
+    mapped_deg = state_rad * 180.0 / torch.pi
+    normalized = (mapped_deg - joint_mins) / (joint_maxs - joint_mins)
+    raw = torch.zeros_like(normalized)
+    raw[:-1] = normalized[:-1] * 200.0 - 100.0
+    raw[-1] = normalized[-1] * 100.0
+    return raw
+
+
+def _rgb_to_uint8(t):
+    arr = t.detach().cpu().numpy()
+    if arr.dtype != np.uint8:
+        if float(arr.max()) <= 1.0 + 1e-3:   # floats in [0,1] -> [0,255]
+            arr = arr * 255.0
+        arr = arr.clip(0, 255).astype(np.uint8)
+    return arr
+
+
+class RawRecorder:
+    """Records demos to disk WITHOUT lerobot (it can't go in kit-python without breaking
+    Isaac). Each episode -> a folder: observation_state.npy, action.npy, timestamps.npy,
+    images_<cam>/frame_%05d.png. Build the LeRobot dataset later with
+    scripts/build_lerobot_dataset.py in a separate venv."""
+
+    def __init__(self, out_root, cameras, fps):
+        self.out_root = out_root
+        self.cam_names = list(cameras.keys())
+        self.fps = fps
+        os.makedirs(out_root, exist_ok=True)
+        self.ep = self._next_index()
+        self._reset()
+        meta = {
+            "fps": fps,
+            "cameras": {c: [cameras[c]["height"], cameras[c]["width"]] for c in self.cam_names},
+            "state_names": JOINT_ORDER,
+            "action_names": JOINT_ORDER,
+        }
+        with open(os.path.join(out_root, "dataset_meta.json"), "w") as f:
+            json.dump(meta, f, indent=2)
+
+    def _next_index(self):
+        i = 0
+        while os.path.exists(os.path.join(self.out_root, f"episode_{i:04d}")):
+            i += 1
+        return i
+
+    def _reset(self):
+        self.states, self.actions = [], []
+        self.frames = {c: [] for c in self.cam_names}
+
+    @property
+    def n(self):
+        return len(self.states)
+
+    def add(self, state6, action6, rgb_by_cam):
+        self.states.append(state6)
+        self.actions.append(action6)
+        for c in self.cam_names:
+            self.frames[c].append(rgb_by_cam[c])
+
+    def save(self):
+        if not self.states:
+            print("[RAW] nothing to save (0 frames) — record something first.", flush=True)
+            return
+        d = os.path.join(self.out_root, f"episode_{self.ep:04d}")
+        os.makedirs(d, exist_ok=True)
+        T = len(self.states)
+        np.save(os.path.join(d, "observation_state.npy"), np.asarray(self.states, dtype=np.float32))
+        np.save(os.path.join(d, "action.npy"), np.asarray(self.actions, dtype=np.float32))
+        np.save(os.path.join(d, "timestamps.npy"), (np.arange(T, dtype=np.float32) / float(self.fps)))
+        for c in self.cam_names:
+            cdir = os.path.join(d, f"images_{c}")
+            os.makedirs(cdir, exist_ok=True)
+            for i, img in enumerate(self.frames[c]):
+                Image.fromarray(img).save(os.path.join(cdir, f"frame_{i:05d}.png"))
+        print(f"[RAW] saved episode {self.ep:04d}: {T} frames, cams={self.cam_names} -> {d}", flush=True)
+        self.ep += 1
+        self._reset()
 
 
 class ActionServer:
@@ -160,26 +247,11 @@ def main():
     action_server = ActionServer(args_cli.bind_host, args_cli.bind_port)
     actions = torch.zeros(env.action_space.shape, device=dev)
 
-    # --- recording is OPTIONAL and needs lerobot; import it lazily so teleop works without it ---
-    recording_mode = all([args_cli.repo_id, args_cli.repo_root, args_cli.task_name])
-    iface = recorder = None
-    if recording_mode:
-        try:
-            from sim_to_real_so101.utils.lerobot_interface import LeRobotSO101Interface
-            from sim_to_real_so101.utils.lerobot_recorder import LeRobotRecorder
-            iface = LeRobotSO101Interface(device=dev, port="", id="bridge", cameras=cameras, fps=30, kind="leader")
-            recorder = LeRobotRecorder(
-                task_name=args_cli.task_name, repo_id=args_cli.repo_id, dataset_root=args_cli.repo_root,
-                fps=30, device=dev, cameras=cameras, save_mp4=args_cli.save_mp4,
-                depth=args_cli.depth, instance_id_seg=args_cli.instance_id_seg,
-            )
-            recorder.init_dataset()
-        except ModuleNotFoundError:
-            print("[WARNING]: `lerobot` not installed on this box — recording disabled, teleop still works.")
-            recording_mode = False
-        except ValueError:
-            print("[ERROR]: dataset folder already exists — recording disabled.")
-            recording_mode = False
+    # Raw recorder — no lerobot needed (lerobot can't go in kit-python without breaking
+    # Isaac). 'S' start/stop (stop saves the episode), 'R' reset (also saves if recording).
+    raw_recorder = RawRecorder(args_cli.raw_out, cameras, fps=30)
+    print(f"[RAW] recording episodes to {args_cli.raw_out}. So far {raw_recorder.ep} exist.", flush=True)
+    prev_recording = False
 
     last_dict = None
     warned_wait = False
@@ -209,20 +281,22 @@ def main():
 
             obs, _, _, _, _ = env.step(actions)
 
+            # ---- raw recording: buffer frames while recording; save when it stops ----
+            recording = keyboard_control.recording
+            if recording and raw is not None:
+                visual_obs = obs.get("visual", None)
+                if visual_obs is not None:
+                    state_real = sim_rad_to_real(obs["policy"]["joint_pos_obs"][0], joint_mins, joint_maxs)
+                    rgb = {c: _rgb_to_uint8(visual_obs[f"rgb_{c}"][0]) for c in cameras}
+                    raw_recorder.add(state_real.cpu().numpy(), raw.cpu().numpy(), rgb)
+            if prev_recording and not recording:   # 'S' (or 'R') stopped recording -> save
+                raw_recorder.save()
+            prev_recording = recording
+
             if keyboard_control.reset_world:
                 keyboard_control.reset_world = False
                 env.reset()
                 continue
-
-            if recording_mode and keyboard_control.recording and raw is not None:
-                visual_obs = obs.get("visual", None)
-                if visual_obs is None:
-                    print("[WARNING]: No 'visual' obs group - recording needs cameras")
-                    keyboard_control.recording = False
-                    continue
-                joint_pos_obs = obs["policy"]["joint_pos_obs"][0]
-                real_obs, vbuf, dbuf, sbuf = iface.sim_to_real_dataset_processor(joint_pos_obs, obs["visual"])
-                recorder.push_frame_to_buffer(raw, real_obs, vbuf, dbuf, sbuf)
 
     env.close()
 
