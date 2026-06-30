@@ -47,6 +47,14 @@ def main():
                 attr.Set(TO)
                 if PhysxSchema and prim.HasAPI(PhysxSchema.PhysxSDFMeshCollisionAPI):
                     prim.RemoveAPI(PhysxSchema.PhysxSDFMeshCollisionAPI)
+                # Tighten the decomposition so the hulls hug the finger surface
+                # (shrinkWrap) instead of leaving a loose gap, and allow more hulls.
+                if PhysxSchema and TO == "convexDecomposition":
+                    decomp = PhysxSchema.PhysxConvexDecompositionCollisionAPI.Apply(prim)
+                    decomp.CreateShrinkWrapAttr(True)
+                    decomp.CreateMaxConvexHullsAttr(64)
+                    decomp.CreateHullVertexLimitAttr(64)
+                    decomp.CreateVoxelResolutionAttr(500000)
                 changed.append((str(prim.GetPath()), old, TO))
 
     for path, old, new in changed:
