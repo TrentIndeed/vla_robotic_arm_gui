@@ -11,7 +11,7 @@ parser.add_argument("--task", type=str, default="Lerobot-So101-Teleop-Bottle-To-
 AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
 args_cli.headless = True
-args_cli.enable_cameras = False
+args_cli.enable_cameras = True   # the env's camera sensors need this at creation
 
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
