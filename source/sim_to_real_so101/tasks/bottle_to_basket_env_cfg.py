@@ -154,22 +154,14 @@ manipulation_object_base = RigidObjectCfg(
 bottle = manipulation_object_base.replace()
 # bottle.usda: a 2 in dia x 3 in tall cylinder body + cap, upright, origin at bottom-centre.
 bottle.spawn.usd_path = f"{assets_path}/usd/bottle.usda"
-# Physics tuned for stable grasping (the default 40 g + no solver iters let the stiff
-# gripper push the bottle straight through its own collision -> trapped + contact-storm lag).
-bottle.spawn.mass_props = sim_utils.MassPropertiesCfg(mass=0.08)            # heavier = far steadier vs the gripper
-bottle.spawn.rigid_props = sim_utils.RigidBodyPropertiesCfg(
-    solver_position_iteration_count=32,   # match the arm so contacts actually resolve (was ~1 -> penetration)
-    solver_velocity_iteration_count=4,
-    max_depenetration_velocity=1.0,       # push apart, but gently — no explosive launch
-    angular_damping=20.0,
-    linear_damping=0.2,
-    max_linear_velocity=5.0,              # anti-launch caps
-    max_angular_velocity=200.0,
-)
-bottle.spawn.collision_props = sim_utils.CollisionPropertiesCfg(
-    contact_offset=0.02,                  # detect contact early enough to avoid tunneling
-    rest_offset=0.0,
-)
+# Physics for the bottle is BAKED INTO bottle.usda (mass + 32 solver iters + depenetration
+# + contact offsets). Isaac's runtime modify_* was silently failing on this hand-authored
+# USD ("Could not perform modify_mass_properties"), so the props set here were ignored and
+# the bottle ran at PhysX defaults (~1 solver iter) -> gripper penetration + contact-storm
+# lag. Leaving these None makes Isaac use the USD's baked values as-is.
+bottle.spawn.mass_props = None
+bottle.spawn.rigid_props = None
+bottle.spawn.collision_props = None
 
 # ---- the target: an open basket (10 x 4 x 3 in, 1/8 in walls). basket.usda is a
 # floor + 4 walls (open top) at your real dimensions, in basket-local coords. ----
