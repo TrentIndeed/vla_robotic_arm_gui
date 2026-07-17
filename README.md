@@ -1,3 +1,15 @@
+# SO-101 Sim-to-Real — fork: bottle→basket task, sim/real verification tools, real-arm teleop bridge
+
+> **This is a fork of NVIDIA's [Sim-to-Real SO-101 Workshop](https://github.com/isaac-sim/Sim-to-Real-SO-101-Workshop).** The upstream README is preserved below, unchanged. My additions:
+>
+> - **`my_task/`** — a "bottle → basket" task adapted from the workshop's vials→rack task (new Isaac Lab env config + gym registrations; real-world dimensions in `my_task/TASK_SPEC.md`).
+> - **`my_task/isaac_tools/`** — `export_episode.py` + `replay_in_isaac.py` to overlay a recorded real-robot LeRobot demo onto the Isaac sim for sim/real verification.
+> - **`tools/follower_bridge_sender.py`** — streams a physical SO-101 arm's joint positions over TCP to the cloud sim, for real-arm teleoperation of the simulation.
+>
+> _Status: in progress — some `my_task/` assets are still placeholders (see its TODOs). Upstream code, assets, and license belong to NVIDIA; see `LICENSE` / `THIRD_PARTY_NOTICES`._
+
+---
+
 # Train an SO-101 Robot From Sim-to-Real With NVIDIA Isaac
 
 ![SO-101 Vial to Rack Task](images/so101_banner.png)
